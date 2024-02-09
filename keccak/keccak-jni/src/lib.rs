@@ -16,35 +16,32 @@
 extern crate jni;
 extern crate tiny_keccak;
 use jni::objects::JClass;
-use jni::sys::jbyteArray;
+use jni::objects::JByteBuffer;
+
+use jni::sys::jint;
 use jni::JNIEnv;
 use tiny_keccak::{Hasher, Keccak};
-use jni::objects::ReleaseMode;
 #[no_mangle]
 pub extern "system" fn Java_org_hyperledger_besu_nativelib_keccak_LibKeccak_compute
 (
     env: JNIEnv,
     _class: JClass,
-    input: jbyteArray,
-    output: jbyteArray,
+    input: JByteBuffer,
+    output: JByteBuffer,
+    input_len: jint,
+    output_len: jint,
 ) {
+    // Get a pointer to the ByteBuffer's data
+    let input_ptr = env.get_direct_buffer_address(input).expect("Cannot get input buffer address").as_ptr();
+    let input_slice = unsafe { std::slice::from_raw_parts(input_ptr, input_len as usize) };
 
-     // Get a pointer to the byte array's elements
-     let input_elements = env.get_primitive_array_critical(input, ReleaseMode::NoCopyBack).expect("Cannot get input array elements");
-     // Convert the AutoPrimitiveArrayCritical to a slice
-     let input_len = env.get_array_length(input).expect("Cannot get input array length") as usize;
-     let input_slice = unsafe { std::slice::from_raw_parts(input_elements.as_ptr() as *const u8, input_len) };
+    // Get a pointer to the ByteBuffer's data
+    let output_ptr = env.get_direct_buffer_address(output).expect("Cannot get output buffer address").as_mut_ptr();
+    let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, output_len as usize) };
 
-     // Get a pointer to the byte array's elements
-     let output_elements = env.get_primitive_array_critical(output, ReleaseMode::NoCopyBack).expect("Cannot get output array elements");
-     // Convert the AutoPrimitiveArrayCritical to a slice
-     let output_len = env.get_array_length(output).expect("Cannot get output array length") as usize;
-     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_elements.as_ptr() as *mut u8, output_len) };
+    let mut keccak = Keccak::v256();
 
-     let mut keccak = Keccak::v256();
+    keccak.update(input_slice);
 
-     keccak.update(input_slice);
-
-     keccak.finalize(output_slice);
-
+    keccak.finalize(output_slice);
 }

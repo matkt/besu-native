@@ -20,6 +20,7 @@ import com.sun.jna.Library;
 import com.sun.jna.Native;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 
 public class LibKeccak implements Library {
 
@@ -38,6 +39,6 @@ public class LibKeccak implements Library {
     ENABLED = enabled;
   }
 
-  public static native void compute(byte[] input, byte[] output);;
+  public static native void compute(ByteBuffer input, ByteBuffer output, int inputCapacity, int outputCapacity);
 
 }
