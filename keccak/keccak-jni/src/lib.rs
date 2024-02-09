@@ -19,24 +19,32 @@ use jni::objects::JClass;
 use jni::sys::jbyteArray;
 use jni::JNIEnv;
 use tiny_keccak::{Hasher, Keccak};
-
+use jni::objects::ReleaseMode;
 #[no_mangle]
 pub extern "system" fn Java_org_hyperledger_besu_nativelib_keccak_LibKeccak_compute
 (
     env: JNIEnv,
     _class: JClass,
     input: jbyteArray,
-) -> jbyteArray {
+    output: jbyteArray,
+) {
 
-                let input = env
-                        .convert_byte_array(input)
-                        .expect("Cannot convert jbyteArray to rust array");
+     // Get a pointer to the byte array's elements
+     let input_elements = env.get_primitive_array_critical(input, ReleaseMode::NoCopyBack).expect("Cannot get input array elements");
+     // Convert the AutoPrimitiveArrayCritical to a slice
+     let input_len = env.get_array_length(input).expect("Cannot get input array length") as usize;
+     let input_slice = unsafe { std::slice::from_raw_parts(input_elements.as_ptr() as *const u8, input_len) };
 
-                let mut raw_out: [u8; 32] = [0; 32];
-                let mut keccak = Keccak::v256();
-                keccak.update(&input);
-                keccak.finalize(&mut raw_out);
+     // Get a pointer to the byte array's elements
+     let output_elements = env.get_primitive_array_critical(output, ReleaseMode::NoCopyBack).expect("Cannot get output array elements");
+     // Convert the AutoPrimitiveArrayCritical to a slice
+     let output_len = env.get_array_length(output).expect("Cannot get output array length") as usize;
+     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_elements.as_ptr() as *mut u8, output_len) };
 
-                env.byte_array_from_slice(&raw_out)
-                        .expect("Couldn't convert to byte array")
+     let mut keccak = Keccak::v256();
+
+     keccak.update(input_slice);
+
+     keccak.finalize(output_slice);
+
 }

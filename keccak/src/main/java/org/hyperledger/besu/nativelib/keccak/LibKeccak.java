@@ -38,6 +38,6 @@ public class LibKeccak implements Library {
     ENABLED = enabled;
   }
 
-  public static native byte[] compute(byte[] input);;
+  public static native void compute(byte[] input, byte[] output);;
 
 }
