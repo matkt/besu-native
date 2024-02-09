@@ -27,17 +27,37 @@ dependencies {
   testImplementation 'org.mockito:mockito-core:4.4.0'
 }
 
-task macLibCopy(type: Copy) {
-  from 'build/lib/libkeccak_jni.dylib'
-  into 'build/resources/main/darwin'
+sourceSets {
+  test {
+    resources {
+      srcDirs = ['src/test/resources']
+    }
+  }
 }
-jar.dependsOn macLibCopy
+
+task macArmLibCopy(type: Copy) {
+  from 'build/darwin-aarch64/lib/libkeccak_jni.dylib'
+  into 'build/resources/main/darwin-aarch64'
+}
+processResources.dependsOn macArmLibCopy
+
+task macLibCopy(type: Copy) {
+  from 'build/darwin-x86-64/lib/libkeccak_jni.dylib'
+  into 'build/resources/main/darwin-x86-64'
+}
+processResources.dependsOn macLibCopy
 
 task linuxLibCopy(type: Copy) {
-  from 'build/lib/libkeccak_jni.so'
+  from 'build/linux-gnu-x86_64/lib/libkeccak_jni.so'
   into 'build/resources/main/linux-x86-64'
 }
-jar.dependsOn linuxLibCopy
+processResources.dependsOn linuxLibCopy
+
+task linuxArm64LibCopy(type: Copy) {
+  from 'build/linux-gnu-aarch64/lib/libkeccak_jni.so'
+  into 'build/resources/main/linux-aarch64'
+}
+processResources.dependsOn linuxArm64LibCopy
 
 jar {
   archiveBaseName = 'besu-native-keccak'

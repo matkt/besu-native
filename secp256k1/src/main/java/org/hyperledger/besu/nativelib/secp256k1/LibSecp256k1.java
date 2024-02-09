@@ -16,7 +16,7 @@
 package org.hyperledger.besu.nativelib.secp256k1;
 
 import java.nio.ByteBuffer;
-import java.util.Random;
+import java.security.SecureRandom;
 
 import com.sun.jna.Callback;
 import com.sun.jna.Library;
@@ -30,12 +30,24 @@ import com.sun.jna.ptr.PointerByReference;
 
 public class LibSecp256k1 implements Library {
 
-  /* Flags to pass to secp256k1_context_create */
-  public static final int SECP256K1_CONTEXT_VERIFY = 0x0101;
-  public static final int SECP256K1_CONTEXT_SIGN = 0x0201;
+  private static final int SECP256K1_FLAGS_TYPE_CONTEXT = 1;
+  private static final int SECP256K1_FLAGS_TYPE_COMPRESSION = 1 << 1;
+  private static final int SECP256K1_FLAGS_BIT_CONTEXT_VERIFY = 1 << 8;
+  private static final int SECP256K1_FLAGS_BIT_CONTEXT_SIGN = 1 << 9;
+  private static final int SECP256K1_FLAGS_BIT_CONTEXT_DECLASSIFY = 1 << 10;
+  private static final int SECP256K1_FLAGS_BIT_COMPRESSION = 1 << 8;
 
-  /* Flag to pass to secp256k1_ec_pubkey_serialize. */
-  public static final int SECP256K1_EC_UNCOMPRESSED = 0x0002;
+  public static final int SECP256K1_CONTEXT_VERIFY =
+      SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_VERIFY;
+  public static final int SECP256K1_CONTEXT_SIGN =
+      SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_SIGN;
+  public static final int SECP256K1_CONTEXT_DECLASSIFY =
+      SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_DECLASSIFY;
+  public static final int SECP256K1_CONTEXT_NONE = SECP256K1_FLAGS_TYPE_CONTEXT;
+
+  public static final int SECP256K1_EC_COMPRESSED =
+      SECP256K1_FLAGS_TYPE_COMPRESSION | SECP256K1_FLAGS_BIT_COMPRESSION;
+  public static final int SECP256K1_EC_UNCOMPRESSED = SECP256K1_FLAGS_TYPE_COMPRESSION;
 
   public static final PointerByReference CONTEXT = createContext();
 
@@ -47,7 +59,7 @@ public class LibSecp256k1 implements Library {
       if (Boolean.parseBoolean(System.getProperty("secp256k1.randomize", "true"))) {
         // randomization requested or not explicitly disabled
         byte[] seed = new byte[32];
-        (new Random()).nextBytes(seed);
+        SecureRandom.getInstanceStrong().nextBytes(seed);
         if (secp256k1_context_randomize(context, seed) != 1) {
           // there was an error, don't preserve the context
           return null;
@@ -147,13 +159,13 @@ public class LibSecp256k1 implements Library {
    * (65 bytes, header byte 0x04), or hybrid (65 bytes, header byte 0x06 or 0x07) format public
    * keys.
    *
-   * @return 1 if the public key was fully valid. 0 if the public key could not be parsed or is
-   *     invalid.
    * @param ctx a secp256k1 context object.
    * @param pubkey (output) pointer to a pubkey object. If 1 is returned, it is set to a parsed
    *     version of input. If not, its value is undefined.
    * @param input pointer to a serialized public key
    * @param inputlen length of the array pointed to by input
+   * @return 1 if the public key was fully valid. 0 if the public key could not be parsed or is
+   *     invalid.
    */
   public static native int secp256k1_ec_pubkey_parse(
       final PointerByReference ctx,
@@ -164,7 +176,6 @@ public class LibSecp256k1 implements Library {
   /**
    * Serialize a pubkey object into a serialized byte sequence.
    *
-   * @return 1 always.
    * @param ctx a secp256k1 context object.
    * @param output (output) a pointer to a 65-byte (if compressed==0) or 33-byte (if compressed==1)
    *     byte array to place the serialized key in.
@@ -173,6 +184,7 @@ public class LibSecp256k1 implements Library {
    * @param pubkey a pointer to a secp256k1_pubkey containing an initialized public key.
    * @param flags SECP256K1_EC_COMPRESSED if serialization should be in compressed format, otherwise
    *     SECP256K1_EC_UNCOMPRESSED.
+   * @return 1 always.
    */
   public static native int secp256k1_ec_pubkey_serialize(
       final PointerByReference ctx,
@@ -191,13 +203,58 @@ public class LibSecp256k1 implements Library {
    * <p>After the call, sig will always be initialized. If parsing failed or R or S are zero, the
    * resulting sig value is guaranteed to fail validation for any message and public key.
    *
-   * @return 1 when the signature could be parsed, 0 otherwise.
    * @param ctx a secp256k1 context object.
    * @param sig (output) a pointer to a signature object
    * @param input64 a pointer to the 64-byte array to parse
+   * @return 1 when the signature could be parsed, 0 otherwise.
    */
   public static native int secp256k1_ecdsa_signature_parse_compact(
       final PointerByReference ctx, final secp256k1_ecdsa_signature sig, final byte[] input64);
+
+  /**
+   * Convert a signature to a normalized lower-S form.
+   *
+   * <p>With ECDSA a third-party can forge a second distinct signature of the same
+   * message, given a single initial signature, but without knowing the key. This
+   * is done by negating the S value modulo the order of the curve, 'flipping'
+   * the sign of the random point R which is not included in the signature.
+   *
+   * <p>Forgery of the same message isn't universally problematic, but in systems
+   * where message malleability or uniqueness of signatures is important this can
+   * cause issues. This forgery can be blocked by all verifiers forcing signers
+   * to use a normalized form.
+   *
+   * <p>The lower-S form reduces the size of signatures slightly on average when
+   * variable length encodings (such as DER) are used and is cheap to verify,
+   * making it a good choice. Security of always using lower-S is assured because
+   * anyone can trivially modify a signature after the fact to enforce this
+   * property anyway.
+   *
+   * <p>The lower S value is always between 0x1 and
+   * 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
+   * inclusive.
+   *
+   * <p>No other forms of ECDSA malleability are known and none seem likely, but
+   * there is no formal proof that ECDSA, even with this additional restriction,
+   * is free of other malleability. Commonly used serialization schemes will also
+   * accept various non-unique encodings, so care should be taken when this
+   * property is required for an application.
+   *
+   * <p>The secp256k1_ecdsa_sign function will by default create signatures in the
+   * lower-S form, and secp256k1_ecdsa_verify will not accept others. In case
+   * signatures come from a system that cannot enforce this property,
+   * secp256k1_ecdsa_signature_normalize must be called before verification.
+   *
+   * @param ctx a secp256k1 context object.
+   * @param sigout (output) a pointer to a signature to fill with the normalized form,
+   *                        or copy if the input was already normalized. (can be NULL if
+   *                        you're only interested in whether the input was already
+   *                        normalized).
+   * @param sigin (input) a pointer to a signature to check/normalize (cannot be NULL,
+   *                        can be identical to sigout)
+   * @return 1 if sigin was not normalized, 0 if it already was.
+   */
+  public static native int secp256k1_ecdsa_signature_normalize(final PointerByReference ctx, final secp256k1_ecdsa_signature sigout, final secp256k1_ecdsa_signature sigin);
 
   /**
    * Verify an ECDSA signature.
@@ -210,11 +267,11 @@ public class LibSecp256k1 implements Library {
    *
    * <p>For details, see the comments for that function.
    *
-   * @return 1 if it is a correct signature, 0 if it is an incorrect or unparseable signature.
    * @param ctx a secp256k1 context object, initialized for verification.
    * @param sig the signature being verified (cannot be NULL)
    * @param msg32 the 32-byte message hash being verified (cannot be NULL)
    * @param pubkey pointer to an initialized public key to verify with (cannot be NULL)
+   * @return 1 if it is a correct signature, 0 if it is an incorrect or unparseable signature.
    */
   public static native int secp256k1_ecdsa_verify(
       final PointerByReference ctx,
@@ -225,10 +282,10 @@ public class LibSecp256k1 implements Library {
   /**
    * Compute the public key for a secret key.
    *
-   * @return 1 if secret was valid, public key stores, 0 if secret was invalid, try again.
    * @param ctx pointer to a context object, initialized for signing (cannot be NULL)
    * @param pubkey (output) pointer to the created public key (cannot be NULL)
    * @param seckey pointer to a 32-byte private key (cannot be NULL)
+   * @return 1 if secret was valid, public key stores, 0 if secret was invalid, try again.
    */
   public static native int secp256k1_ec_pubkey_create(
       final PointerByReference ctx, final secp256k1_pubkey pubkey, final byte[] seckey);
@@ -263,11 +320,11 @@ public class LibSecp256k1 implements Library {
   /**
    * Parse a compact ECDSA signature (64 bytes + recovery id).
    *
-   * @return 1 when the signature could be parsed, 0 otherwise
    * @param ctx a secp256k1 context object
    * @param sig (output) a pointer to a signature object
    * @param input64 a pointer to a 64-byte compact signature
    * @param recid the recovery id (0, 1, 2 or 3)
+   * @return 1 when the signature could be parsed, 0 otherwise
    */
   public static native int secp256k1_ecdsa_recoverable_signature_parse_compact(
       final PointerByReference ctx,
@@ -292,8 +349,6 @@ public class LibSecp256k1 implements Library {
   /**
    * Create a recoverable ECDSA signature.
    *
-   * @return 1 if signature created, 0 if the nonce generation function failed or the private key
-   *     was invalid.
    * @param ctx pointer to a context object, initialized for signing (cannot be NULL)
    * @param sig (output) pointer to an array where the signature will be placed (cannot be NULL)
    * @param msg32 the 32-byte message hash being signed (cannot be NULL)
@@ -301,6 +356,8 @@ public class LibSecp256k1 implements Library {
    * @param noncefp pointer to a nonce generation function. If NULL,
    *     secp256k1_nonce_function_default is used
    * @param ndata pointer to arbitrary data used by the nonce generation function (can be NULL)
+   * @return 1 if signature created, 0 if the nonce generation function failed or the private key
+   *     was invalid.
    */
   public static native int secp256k1_ecdsa_sign_recoverable(
       final PointerByReference ctx,
@@ -313,12 +370,12 @@ public class LibSecp256k1 implements Library {
   /**
    * Recover an ECDSA public key from a signature.
    *
-   * @return 1 if public key successfully recovered (which guarantees a correct signature), 0
-   *     otherwise.
    * @param ctx pointer to a context object, initialized for verification (cannot be NULL)
    * @param pubkey (output) pointer to the recovered public key (cannot be NULL)
    * @param sig pointer to initialized signature that supports pubkey recovery (cannot be NULL)
    * @param msg32 the 32-byte message hash assumed to be signed (cannot be NULL)
+   * @return 1 if public key successfully recovered (which guarantees a correct signature), 0
+   *     otherwise.
    */
   public static native int secp256k1_ecdsa_recover(
       final PointerByReference ctx,

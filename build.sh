@@ -34,20 +34,61 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 SCRIPTDIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
-
 # Determine core count for parallel make
 if [[ "$OSTYPE" == "linux-gnu" ]];  then
   CORE_COUNT=$(nproc)
+  OSARCH=${OSTYPE%%[0-9.]*}-`arch`
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]];  then
-  export CFLAGS="-arch x86_64 -arch arm64"
   CORE_COUNT=$(sysctl -n hw.ncpu)
+  if [[ "`machine`" == "arm"* ]]; then
+    arch_name="aarch64"
+    export CFLAGS="-arch arm64"
+  else
+    arch_name="x86-64"
+    export CFLAGS="-arch x86_64"
+  fi
+  OSARCH="darwin-$arch_name"
 fi
 
 # add to path cargo
 [ -f $HOME/.cargo/env ] && . $HOME/.cargo/env
 
+# add to path brew
+[ -f $HOME/.zprofile ] && . $HOME/.zprofile
+
+build_blake2bf() {
+
+  cat <<EOF
+  #############################
+  ###### build blake2bf ######
+  #############################
+EOF
+
+  # This version of arm blake is actually slower than java blake on arm
+  if [[ "$OSARCH" == "linux-gnu-aarch64" ]];  then
+    return
+    #cd "$SCRIPTDIR/blake2bf/arm64"
+  else if [[ "$OSARCH" == "darwin-aarch64" ]];  then
+    return
+    #cd "$SCRIPTDIR/blake2bf/aarch64"
+  else
+    cd "$SCRIPTDIR/blake2bf/x86_64"
+  fi
+
+  # delete old build dir, if exists
+  rm -rf "$SCRIPTDIR/blake2bf/build" || true
+
+  if [[ -e makefile ]]; then
+    make clean
+  fi
+
+  make
+  mkdir -p "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
+  mv libblake2bf.* "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
+  fi
+}
 
 build_secp256k1() {
 
@@ -67,7 +108,7 @@ EOF
   fi
 
   ./autogen.sh && \
-    ./configure --prefix="$SCRIPTDIR/secp256k1/build" $SECP256K1_BUILD_OPTS && \
+    ./configure --prefix="$SCRIPTDIR/secp256k1/build/${OSARCH}" $SECP256K1_BUILD_OPTS && \
     make -j $CORE_COUNT && \
     make -j $CORE_COUNT install
 }
@@ -79,45 +120,81 @@ build_altbn128() {
   ############################
 EOF
 
+  echo "building altbn128 for ${OSARCH}"
   cd "$SCRIPTDIR/altbn128/sputnikvm_altbn128"
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/altbn128/build" || true
-  mkdir -p "$SCRIPTDIR/altbn128/build/lib"
+  mkdir -p "$SCRIPTDIR/altbn128/build/${OSARCH}/lib"
 
   cargo clean
-
   if [[ "$OSTYPE" == "darwin"* ]];  then
     lipo_lib "libeth_altbn128" ""
   else
     cargo build --lib --release
   fi
+  mkdir -p "$SCRIPTDIR/altbn128/build/${OSARCH}/lib"
+  cp target/release/libeth_altbn128.* "$SCRIPTDIR/altbn128/build/${OSARCH}/lib"
+}
 
-  cp target/release/libeth_altbn128.* "$SCRIPTDIR/altbn128/build/lib"
+build_arithmetic() {
+  cat <<EOF
+  ##############################
+  ###### build arithmetic ######
+  ##############################
+EOF
+
+  cd "$SCRIPTDIR/arithmetic/arithmetic"
+
+  # delete old build dir, if exists
+  rm -rf "$SCRIPTDIR/arithmetic/build" || true
+  mkdir -p "$SCRIPTDIR/arithmetic/build/lib"
+
+  cargo clean
+
+  if [[ "$OSTYPE" == "darwin"* ]];  then
+    lipo_lib "libeth_arithmetic" ""
+  else
+    cargo build --lib --release
+  fi
+
+  mkdir -p "$SCRIPTDIR/arithmetic/build/${OSARCH}/lib"
+  cp target/release/libeth_arithmetic.* "$SCRIPTDIR/arithmetic/build/${OSARCH}/lib"
 }
 
 build_ipa_multipoint() {
   cat <<EOF
-  ############################
+  ##################################
   ###### build ipa_multipoint ######
-  ############################
+  ##################################
 EOF
 
   cd "$SCRIPTDIR/ipa-multipoint/ipa_multipoint_jni"
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/ipa-multipoint/build" || true
-  mkdir -p "$SCRIPTDIR/ipa-multipoint/build/lib"
+  mkdir -p "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
 
   cargo clean
 
-  if [[ "$OSTYPE" == "darwin"* ]];  then
-    lipo_lib "libipa_multipoint_jni" ""
+  if [[ "$OSARCH" == "darwin-x86-64" ]];  then
+    cargo build --lib --release --target=x86_64-apple-darwin
+    lipo -create \
+      -output target/release/libipa_multipoint_jni.dylib \
+      -arch x86_64 target/x86_64-apple-darwin/release/libipa_multipoint_jni.dylib
+    lipo -info ./target/release/libipa_multipoint_jni.dylib
+  elif [[ "$OSARCH" == "darwin-aarch64" ]]; then
+    cargo build --lib --release --target=aarch64-apple-darwin
+    lipo -create \
+      -output target/release/libipa_multipoint_jni.dylib \
+      -arch arm64 target/aarch64-apple-darwin/release/libipa_multipoint_jni.dylib
+    lipo -info ./target/release/libipa_multipoint_jni.dylib
   else
     cargo build --lib --release
   fi
 
-  cp target/release/libipa_multipoint_jni.* "$SCRIPTDIR/ipa-multipoint/build/lib"
+  mkdir -p "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
+  cp target/release/libipa_multipoint_jni.* "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
 }
 
 build_bls12_381() {
@@ -127,11 +204,12 @@ build_bls12_381() {
   #############################
 EOF
 
-  cd "$SCRIPTDIR/bls12-381/matterlabs-eip1962"
+  echo "building bls12-381 for ${OSARCH}"
+  cd "$SCRIPTDIR/bls12-381/updated-eip1962"
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/bls12-381/build" || true
-  mkdir -p "$SCRIPTDIR/bls12-381/build/lib"
+  mkdir -p "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
 
   cargo clean
   if [[ "$OSTYPE" == "darwin"* ]];  then
@@ -139,7 +217,9 @@ EOF
   else
       cargo build --lib --features eip_2357_c_api --release
   fi
-  cp target/release/libeth_pairings.* "$SCRIPTDIR/bls12-381/build/lib"
+  mkdir -p "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
+  cp target/release/libeth_pairings.* "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
+
 }
 
 build_jars(){
@@ -185,6 +265,7 @@ EOF
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/secp256r1/build" || true
+  find . -name *.o -exec rm -rf {} \;
 
   if [[ "$OSTYPE" == "msys" ]]; then
   	LIBRARY_EXTENSION=dll
@@ -197,11 +278,18 @@ EOF
     EXTRA_FLAGS="no-asm" # avoid assembly because of pipeline error
   fi
 
+  OPENSSL_PLATFORM=""
+  if [[ "$OSARCH" == "linux-gnu-aarch64" ]]; then
+    OPENSSL_PLATFORM="linux-aarch64"
+  fi
+
+
   git submodule init
   git submodule update
 
   cd openssl
-  ./Configure enable-ec_nistp_64_gcc_128 no-stdio no-ocsp no-nextprotoneg no-module \
+
+  ./Configure $OPENSSL_PLATFORM enable-ec_nistp_64_gcc_128 no-stdio no-ocsp no-nextprotoneg no-module \
               no-legacy no-gost no-engine no-dynamic-engine no-deprecated no-comp \
               no-cmp no-capieng no-ui-console no-tls no-ssl no-dtls no-aria no-bf \
               no-blake2 no-camellia no-cast no-chacha no-cmac no-des no-dh no-dsa \
@@ -217,39 +305,78 @@ EOF
     lipo -info ./release/libbesu_native_ec.dylib
     lipo -info ./release/libbesu_native_ec_crypto.dylib
   fi
+
+  mkdir -p "./release/${OSARCH}"
+  echo `pwd`
+  cp ./release/libbesu_native_ec* "./release/${OSARCH}/"
+
 }
 
+build_gnark() {
+  cat <<EOF
+  ############################
+  ####### build gnark #######
+  ############################
+EOF
+
+  cd "$SCRIPTDIR/gnark/gnark-jni"
+
+  # delete old build dir, if exists
+  rm -rf "$SCRIPTDIR/gnark/build" || true
+  mkdir -p "$SCRIPTDIR/gnark/build/lib"
+
+  if [[ "$OSTYPE" == "msys" ]]; then
+    	LIBRARY_EXTENSION=dll
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    LIBRARY_EXTENSION=so
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    LIBRARY_EXTENSION=dylib
+  fi
+
+  go build -buildmode=c-shared -o libgnark_jni.$LIBRARY_EXTENSION gnark-jni.go
+
+  mkdir -p "$SCRIPTDIR/gnark/build/${OSARCH}/lib"
+  cp libgnark_jni.* "$SCRIPTDIR/gnark/build/${OSARCH}/lib"
+}
 
 build_keccak() {
   cat <<EOF
-  ############################
-  ####### build keccak #######
-  ############################
+  ##################################
+  ###### build keccak ######
+  ##################################
 EOF
 
   cd "$SCRIPTDIR/keccak/keccak-jni"
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/keccak/build" || true
-  mkdir -p "$SCRIPTDIR/keccak/build/lib"
+  mkdir -p "$SCRIPTDIR/keccak/build/${OSARCH}/lib"
 
   cargo clean
 
-  if [[ "$OSTYPE" == "darwin"* ]];  then
-    lipo_lib "libkeccak_jni" ""
+  if [[ "$OSARCH" == "darwin-x86-64" ]];  then
+    cargo build --lib --release --target=x86_64-apple-darwin
+    lipo -create \
+      -output target/release/libkeccak_jni.dylib \
+      -arch x86_64 target/x86_64-apple-darwin/release/libkeccak_jni.dylib
+    lipo -info ./target/release/libkeccak_jni.dylib
+  elif [[ "$OSARCH" == "darwin-aarch64" ]]; then
+    cargo build --lib --release --target=aarch64-apple-darwin
+    lipo -create \
+      -output target/release/libkeccak_jni.dylib \
+      -arch arm64 target/aarch64-apple-darwin/release/libkeccak_jni.dylib
+    lipo -info ./target/release/libkeccak_jni.dylib
   else
     cargo build --lib --release
   fi
 
-  cp target/release/libkeccak_jni.* "$SCRIPTDIR/keccak/build/lib"
+  mkdir -p "$SCRIPTDIR/keccak/build/${OSARCH}/lib"
+  cp target/release/libkeccak_jni.* "$SCRIPTDIR/keccak/build/${OSARCH}/lib"
 }
 
 build_keccak
-build_secp256k1
-build_altbn128
-build_bls12_381
-build_ipa_multipoint
-build_secp256r1
+
+
 
 build_jars
 exit

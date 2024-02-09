@@ -20,36 +20,52 @@ plugins {
 }
 
 dependencies {
-    implementation 'net.java.dev.jna:jna:5.5.0'
+    implementation 'net.java.dev.jna:jna:5.12.1'
 
-    testImplementation 'com.google.guava:guava:29.0-jre'
-    testImplementation 'junit:junit:4.13'
-    testImplementation 'org.apache.tuweni:tuweni-bytes:2.0.0'
-    testImplementation 'org.assertj:assertj-core:3.16.1'
+    testImplementation 'com.google.guava:guava:31.1-jre'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.apache.tuweni:tuweni-bytes:2.2.0'
+    testImplementation 'org.assertj:assertj-core:3.22.0'
 }
 
+task macArmLibCopy(type: Copy) {
+    from 'besu-native-ec/release/darwin-aarch64/libbesu_native_ec.dylib'
+    from 'besu-native-ec/release/darwin-aarch64/libbesu_native_ec_crypto.dylib'
+    into 'build/resources/main/darwin-aarch64'
+}
+jar.dependsOn macArmLibCopy
+
 task macLibCopy(type: Copy) {
-    from 'besu-native-ec/release/libbesu_native_ec.dylib'
-    from 'besu-native-ec/release/libbesu_native_ec_crypto.dylib'
-    into 'build/resources/main/darwin'
+    from 'besu-native-ec/release/darwin-x86-64/libbesu_native_ec.dylib'
+    from 'besu-native-ec/release/darwin-x86-64/libbesu_native_ec_crypto.dylib'
+    into 'build/resources/main/darwin-x86-64'
 }
 jar.dependsOn macLibCopy
 
 task linuxLibCopy(type: Copy) {
-    from 'besu-native-ec/release/libbesu_native_ec.so'
-    from 'besu-native-ec/release/libbesu_native_ec_crypto.so'
+    from 'besu-native-ec/release/linux-gnu-x86_64/libbesu_native_ec.so'
+    from 'besu-native-ec/release/linux-gnu-x86_64/libbesu_native_ec_crypto.so'
     into 'build/resources/main/linux-x86-64'
 }
 jar.dependsOn linuxLibCopy
 
+task linuxArm64LibCopy(type: Copy) {
+    from 'besu-native-ec/release/linux-gnu-aarch64/libbesu_native_ec.so'
+    from 'besu-native-ec/release/linux-gnu-aarch64/libbesu_native_ec_crypto.so'
+    into 'build/resources/main/linux-aarch64'
+}
+jar.dependsOn linuxArm64LibCopy
+
 jar {
     archiveBaseName = 'besu-native-secp256r1'
+    includeEmptyDirs = false
     manifest {
         attributes(
                 'Specification-Title': archiveBaseName,
                 'Specification-Version': project.version,
                 'Implementation-Title': archiveBaseName,
                 'Implementation-Version': project.version,
+                'Automatic-Module-Name': 'org.hyperledger.besu.nativelib.secp256r1'
         )
     }
 }

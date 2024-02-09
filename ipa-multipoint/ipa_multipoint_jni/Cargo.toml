@@ -22,11 +22,13 @@ repository = "https://github.com/hyperledger/besu-native"
 edition = "2018"
 
 [dependencies]
-ipa-multipoint = { git = "https://github.com/crate-crypto/ipa_multipoint", branch = "develop" }
-bandersnatch = "0.1.1"
-jni = { version = "0.19.0", features = ["invocation"] } # We use invocation in tests.
-ark-ff = "0.3.0"
+ffi_interface = { git = "https://github.com/crate-crypto/rust-verkle", rev = "185ccf14678ae4d2277547e2f2615933f10553b5" }
+jni = { version = "0.19.0", features = [
+    "invocation",
+] } # We use invocation in tests.
 hex = "0.4.3"
+num-bigint = "0.4.4"
+once_cell = "1.19.0"
 
 [lib]
 name = "ipa_multipoint_jni"

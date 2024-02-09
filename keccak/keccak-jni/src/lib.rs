@@ -15,22 +15,28 @@
 
 extern crate jni;
 extern crate tiny_keccak;
-
+use jni::objects::JClass;
+use jni::sys::jbyteArray;
+use jni::JNIEnv;
 use tiny_keccak::{Hasher, Keccak};
 
 #[no_mangle]
-pub extern "C" fn compute(
-    i: *const ::std::os::raw::c_char,
-    i_len: u32,
-    o: *mut ::std::os::raw::c_char
-){
-    let input_i8: &[i8] = unsafe { std::slice::from_raw_parts(i, i_len as usize) };
-    let input: &[u8] = unsafe { std::mem::transmute(input_i8) };
+pub extern "system" fn Java_org_hyperledger_besu_nativelib_keccak_LibKeccak_compute
+(
+    env: JNIEnv,
+    _class: JClass,
+    input: jbyteArray,
+) -> jbyteArray {
 
-    let raw_out_i8: &mut [i8] = unsafe { std::slice::from_raw_parts_mut(o, 32 as usize) };
-    let mut raw_out: &mut [u8] = unsafe { std::mem::transmute(raw_out_i8) };
+                let input = env
+                        .convert_byte_array(input)
+                        .expect("Cannot convert jbyteArray to rust array");
 
-    let mut keccak = Keccak::v256();
-    keccak.update(&input);
-    keccak.finalize(&mut raw_out);
+                let mut raw_out: [u8; 32] = [0; 32];
+                let mut keccak = Keccak::v256();
+                keccak.update(&input);
+                keccak.finalize(&mut raw_out);
+
+                env.byte_array_from_slice(&raw_out)
+                        .expect("Couldn't convert to byte array")
 }

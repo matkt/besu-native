@@ -15,6 +15,11 @@
  */
 package org.hyperledger.besu.nativelib.ipamultipoint;
 
+import com.sun.jna.Native;
+
+import java.io.File;
+import java.io.IOException;
+
 /**
  * Java interface to ipa-multipoint, a rust library that supports computing polynomial commitments.
  *
@@ -23,14 +28,40 @@ package org.hyperledger.besu.nativelib.ipamultipoint;
  */
 public class LibIpaMultipoint {
 
-  /**
-   * Evaluates a polynomial of degree 3 (uniquely defined by 4 values) at a specific point on the curve.
+  @SuppressWarnings("WeakerAccess")
+  public static final boolean ENABLED;
 
-   * @param y0 the first coordinate of the projection on the curve
-   * @param y1 the second coordinate of the projection on the curve
-   * @param y2 the third coordinate of the projection on the curve
-   * @param y3 the fourth coordinate of the projection on the curve
-   * @return the coordinates of the projection of the polynomial on the curve
+  static {
+    boolean enabled;
+    try {
+      File lib = Native.extractFromResourcePath("ipa_multipoint_jni");
+      System.load(lib.getAbsolutePath());
+      enabled = true;
+    } catch (IOException e) {
+      enabled = false;
+    }
+    ENABLED = enabled;
+  }
+
+  /**
+   * Evaluates a polynomial of degree 255 (uniquely defined by 256 values) at a specific point on the curve.
+
+   * @param input [Fr,Fr,Fr...]
+   * @return group_to_field(commitment)
    */
-  public static native byte[] commit(byte[] y0, byte[] y1, byte[] y2, byte[] y3);
+  public static native byte[] commit(byte[] input);
+
+  /**
+   * Evaluates a polynomial of degree 255 (uniquely defined by 256 values) at a specific point on the curve.
+   * @param input [Fr,Fr,Fr...]
+   * @return commitment.to_bytes()
+   */
+  public static native byte[] commitRoot(byte[] input);
+
+  /**
+   * Pedersen hash as specified in https://notes.ethereum.org/@vbuterin/verkle_tree_eip
+   * @param input Expects 64byte value as input encoded as byte[]
+   * @return 32bytes as byte[]
+   */
+  public static native byte[] pedersenHash(byte[] input);
 }

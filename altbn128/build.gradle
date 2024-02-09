@@ -20,29 +20,43 @@ plugins {
 }
 
 dependencies {
-  implementation 'net.java.dev.jna:jna:5.8.0'
+  implementation 'net.java.dev.jna:jna:5.12.1'
 }
 
+task macArmLibCopy(type: Copy) {
+  from 'build/darwin-aarch64/lib/libeth_altbn128.dylib'
+  into 'build/resources/main/darwin-aarch64'
+}
+jar.dependsOn macArmLibCopy
+
 task macLibCopy(type: Copy) {
-  from 'build/lib/libeth_altbn128.dylib'
-  into 'build/resources/main/darwin'
+  from 'build/darwin-x86-64/lib/libeth_altbn128.dylib'
+  into 'build/resources/main/darwin-x86-64'
 }
 jar.dependsOn macLibCopy
 
 task linuxLibCopy(type: Copy) {
-  from 'build/lib/libeth_altbn128.so'
+  from 'build/linux-gnu-x86_64/lib/libeth_altbn128.so'
   into 'build/resources/main/linux-x86-64'
 }
 jar.dependsOn linuxLibCopy
 
+task linuxArm64LibCopy(type: Copy) {
+  from 'build/linux-gnu-aarch64/lib/libeth_altbn128.so'
+  into 'build/resources/main/linux-aarch64'
+}
+jar.dependsOn linuxArm64LibCopy
+
 jar {
   archiveBaseName = 'besu-native-altbn128'
+  includeEmptyDirs = false
   manifest {
     attributes(
         'Specification-Title': archiveBaseName,
         'Specification-Version': project.version,
         'Implementation-Title': archiveBaseName,
         'Implementation-Version': project.version,
+        'Automatic-Module-Name': 'org.hyperledger.besu.nativelib.altbn128'
     )
   }
 }

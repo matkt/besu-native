@@ -20,33 +20,47 @@ plugins {
 }
 
 dependencies {
-  implementation 'net.java.dev.jna:jna:5.8.0'
-  testImplementation 'com.google.guava:guava:29.0-jre'
-  testImplementation 'junit:junit:4.13'
-  testImplementation 'org.apache.tuweni:tuweni-bytes:2.0.0'
-  testImplementation 'org.assertj:assertj-core:3.16.1'
+  implementation 'net.java.dev.jna:jna:5.12.1'
+  testImplementation 'com.google.guava:guava:31.1-jre'
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.apache.tuweni:tuweni-bytes:2.2.0'
+  testImplementation 'org.assertj:assertj-core:3.22.0'
 }
 
 task macLibCopy(type: Copy) {
-  from 'build/lib/libeth_pairings.dylib'
-  into 'build/resources/main/darwin'
+  from 'build/darwin-x86-64/lib/libeth_pairings.dylib'
+  into 'build/resources/main/darwin-x86-64'
 }
-jar.dependsOn macLibCopy
+processResources.dependsOn macLibCopy
+
+task macAarch64LibCopy(type: Copy) {
+  from 'build/darwin-aarch64/lib/libeth_pairings.dylib'
+  into 'build/resources/main/darwin-aarch64'
+}
+processResources.dependsOn macAarch64LibCopy
 
 task linuxLibCopy(type: Copy) {
-  from 'build/lib/libeth_pairings.so'
+  from 'build/linux-gnu-x86_64/lib/libeth_pairings.so'
   into 'build/resources/main/linux-x86-64'
 }
-jar.dependsOn linuxLibCopy
+processResources.dependsOn linuxLibCopy
+
+task linuxArm64LibCopy(type: Copy) {
+  from 'build/linux-gnu-aarch64/lib/libeth_pairings.so'
+  into 'build/resources/main/linux-aarch64'
+}
+processResources.dependsOn linuxArm64LibCopy
 
 jar {
   archiveBaseName = 'besu-native-bls12-381'
+  includeEmptyDirs = false
   manifest {
     attributes(
         'Specification-Title': archiveBaseName,
         'Specification-Version': project.version,
         'Implementation-Title': archiveBaseName,
         'Implementation-Version': project.version,
+        'Automatic-Module-Name': 'org.hyperledger.besu.nativelib.bls12_381'
     )
   }
 }

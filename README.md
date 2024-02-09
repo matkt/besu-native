@@ -33,7 +33,7 @@ TBD
 
 ### Rust
 
-Rust needs to be installed to compile the altbn128 library. The default way to install it on Linux or OS X is:
+Rust needs to be installed to compile the arithmetic and bls12-381 libraries. The default way to install it on Linux or OS X is:
 
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -47,6 +47,6 @@ If you prefer another installation method please refer to the [Rust installation
    sure that you have cloned those submodules into the appropriate locations,
    run `git submodule init && git submodule update`
 2. The build steps are entirely contained within the `build.sh` script at the repository root.
-   Simply run this script, and all of the native modules contained herin will be configured with the
+   Simply run this script, and all the native modules contained herein will be configured with the
    correct build options for Hyperledger Besu, and built.
 

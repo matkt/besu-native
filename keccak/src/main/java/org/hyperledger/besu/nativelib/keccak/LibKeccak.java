@@ -19,6 +19,8 @@ package org.hyperledger.besu.nativelib.keccak;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 
+import java.io.File;
+
 public class LibKeccak implements Library {
 
   public static final boolean ENABLED;
@@ -26,15 +28,16 @@ public class LibKeccak implements Library {
   static {
     boolean enabled;
     try {
-      Native.register(LibKeccak.class, "keccak_jni");
+      File lib = Native.extractFromResourcePath("keccak_jni");
+      System.load(lib.getAbsolutePath());
       enabled = true;
     } catch (final Throwable t) {
+      t.printStackTrace();
       enabled = false;
     }
     ENABLED = enabled;
   }
 
-  public static native int compute(
-      byte[] i, int i_len, byte[] o);
+  public static native byte[] compute(byte[] input);;
 
 }
