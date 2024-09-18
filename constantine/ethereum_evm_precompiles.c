@@ -15,13 +15,14 @@ void printByteArray(const char* label, const byte* array, size_t len) {
 }
 
 JNIEXPORT jint JNICALL Java_org_hyperledger_besu_nativelib_constantine_LibConstantineEIP196_ctt_1eth_1evm_1bn254_1g1add(JNIEnv *env, jobject obj, jbyteArray jr, jint r_len, jbyteArray jinputs, jint inputs_len) {
-    jbyte *r = (*env)->GetByteArrayElements(env, jr, NULL);
-    jbyte *inputs = (*env)->GetByteArrayElements(env, jinputs, NULL);
+    // Utilisez GetPrimitiveArrayCritical pour un accès direct
+    jbyte *r = (jbyte *)(*env)->GetPrimitiveArrayCritical(env, jr, NULL);
+    jbyte *inputs = (jbyte *)(*env)->GetPrimitiveArrayCritical(env, jinputs, NULL);
 
     ctt_evm_status status = ctt_eth_evm_bn254_g1add((byte *)r, (ptrdiff_t)r_len, (const byte *)inputs, (ptrdiff_t)inputs_len);
 
-    (*env)->ReleaseByteArrayElements(env, jr, r, 0);
-    (*env)->ReleaseByteArrayElements(env, jinputs, inputs, 0);
+    (*env)->ReleasePrimitiveArrayCritical(env, jr, r, JNI_ABORT);
+    (*env)->ReleasePrimitiveArrayCritical(env, jinputs, inputs, JNI_ABORT);
 
     return (jint)status;
 }
