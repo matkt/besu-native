@@ -15,7 +15,6 @@ void printByteArray(const char* label, const byte* array, size_t len) {
 }
 
 JNIEXPORT jint JNICALL Java_org_hyperledger_besu_nativelib_constantine_LibConstantineEIP196_ctt_1eth_1evm_1bn254_1g1add(JNIEnv *env, jobject obj, jbyteArray jr, jint r_len, jbyteArray jinputs, jint inputs_len) {
-    // Utilisez GetPrimitiveArrayCritical pour un accès direct
     jbyte *r = (jbyte *)(*env)->GetPrimitiveArrayCritical(env, jr, NULL);
     jbyte *inputs = (jbyte *)(*env)->GetPrimitiveArrayCritical(env, jinputs, NULL);
 
