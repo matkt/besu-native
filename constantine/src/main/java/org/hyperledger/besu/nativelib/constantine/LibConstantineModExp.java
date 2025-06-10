@@ -20,12 +20,8 @@ public class LibConstantineModExp {
 
     public static native int modexp(byte[] r, int r_len, byte[] inputs, int inputs_len);
 
-    public static byte[] modexp_precompiled(byte[] result, byte[] inputs) {
-        int status = modexp(result, result.length, inputs, inputs.length);
-        if (status != 0) {
-            throw new RuntimeException("eth_evm_modexp failed with status: " + status);
-        }
-        return result;
+    public static int modexp_precompiled(byte[] result, byte[] inputs) {
+        return modexp(result, result.length, inputs, inputs.length);
     }
 
 }
