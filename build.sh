@@ -320,6 +320,35 @@ EOF
   cp libgnark_eip_196.* "$SCRIPTDIR/gnark/build/${OSARCH}/lib"
 }
 
+build_uint256() {
+  cat <<EOF
+  ############################
+  ####### build uint256 #######
+  ############################
+EOF
+
+  cd "$SCRIPTDIR/uint256/uint256-jni"
+
+  # delete old build dir, if exists
+  rm -rf "$SCRIPTDIR/uint256/build" || true
+  mkdir -p "$SCRIPTDIR/uint256/build/lib"
+
+  if [[ "$OSTYPE" == "msys" ]]; then
+    	LIBRARY_EXTENSION=dll
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    LIBRARY_EXTENSION=so
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    LIBRARY_EXTENSION=dylib
+    export GOROOT=$(brew --prefix go@1.24)/libexec
+    export PATH=$GOROOT/bin:$PATH
+  fi
+
+  go build -buildmode=c-shared -o libuint256_jni.$LIBRARY_EXTENSION uint256-jni.go
+
+  mkdir -p "$SCRIPTDIR/uint256/build/${OSARCH}/lib"
+  cp libuint256_jni.* "$SCRIPTDIR/uint256/build/${OSARCH}/lib"
+}
+
 build_constantine() {
   echo "#############################"
   echo "####### build constantine ####"
@@ -407,14 +436,7 @@ EOF
 }
 
 
-build_blake2bf
-build_secp256k1
-build_arithmetic
-build_ipa_multipoint
-build_secp256r1
-build_gnark
-build_constantine
-build_boringssl
+build_uint256
 
 build_jars
 exit
