@@ -12,6 +12,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
+
 //export mod
 func mod(a *C.char, aLen C.int, b *C.char, bLen C.int, out *C.char) C.int {
 	if a == nil || b == nil || out == nil {

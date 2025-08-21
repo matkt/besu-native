@@ -20,6 +20,8 @@ import org.apache.tuweni.bytes.MutableBytes;
 import org.junit.Test;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
@@ -27,12 +29,13 @@ public class LibUint256Test {
 
     @Test
     public void testHashZeroBn254() {
-        byte[] output = new byte[Bytes32.SIZE];
+
         byte[] a = BigInteger.ONE.toByteArray();
         byte[] b = BigInteger.TWO.toByteArray();
 
-        LibUint256.mod(a,a.length, b, b.length, output);
-        assertThat(Bytes.wrap(output)).isNotNull();
+
+        System.out.println(Bytes.wrap(LibUint256.mod256(a,b)));
+        assertThat(Bytes.wrap(LibUint256.mod256(a,b))).isNotNull();
     }
 
 
