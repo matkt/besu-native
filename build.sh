@@ -341,7 +341,7 @@ EOF
 
   if [ "$OS" = "Darwin" ]; then
     # macOS - Détection automatique de JAVA_HOME si pas défini
-    if [ -z "$JAVA_HOME" ]; then
+    if [ -z "${JAVA_HOME:-}" ]; then
       JAVA_HOME=$(/usr/libexec/java_home)
     fi
 
@@ -367,7 +367,7 @@ EOF
 
   else
     # Linux
-    if [ -z "$JAVA_HOME" ]; then
+   if [ -z "${JAVA_HOME:-}" ]; then
       JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
     fi
 
