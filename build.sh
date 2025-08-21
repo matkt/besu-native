@@ -331,22 +331,58 @@ EOF
 
   # delete old build dir, if exists
   rm -rf "$SCRIPTDIR/uint256/build" || true
-  mkdir -p "$SCRIPTDIR/uint256/build/lib"
+  mkdir -p "$SCRIPTDIR/uint256/build/${OSARCH}/lib/"
 
-  if [[ "$OSTYPE" == "msys" ]]; then
-    	LIBRARY_EXTENSION=dll
-  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    LIBRARY_EXTENSION=so
-  elif [[ "$OSTYPE" == "darwin"* ]]; then
-    LIBRARY_EXTENSION=dylib
-    export GOROOT=$(brew --prefix go@1.24)/libexec
-    export PATH=$GOROOT/bin:$PATH
+  # Compiler Go
+  go build -buildmode=c-archive -o build/uint256.a uint256-jni.go
+
+  # Détection de l'OS
+  OS=$(uname -s)
+
+  if [ "$OS" = "Darwin" ]; then
+    # macOS - Détection automatique de JAVA_HOME si pas défini
+    if [ -z "$JAVA_HOME" ]; then
+      JAVA_HOME=$(/usr/libexec/java_home)
+    fi
+
+    echo "Using JAVA_HOME: $JAVA_HOME"
+
+    # Vérifier si jni_md.h existe dans darwin/
+    if [ ! -f "$JAVA_HOME/include/darwin/jni_md.h" ]; then
+      # Corretto/OpenJDK peut avoir jni_md.h directement dans include/
+      JNI_MD_PATH="$JAVA_HOME/include"
+    else
+      JNI_MD_PATH="$JAVA_HOME/include/darwin"
+    fi
+
+    gcc -dynamiclib -fPIC \
+        -I"$JAVA_HOME/include" \
+        -I"$JNI_MD_PATH" \
+        -o "build/libuint256_jni.dylib" \
+        uint256-jni.c \
+        build/uint256.a \
+        -lpthread
+
+    cp "build/libuint256_jni.dylib" "$SCRIPTDIR/uint256/build/${OSARCH}/lib/"
+
+  else
+    # Linux
+    if [ -z "$JAVA_HOME" ]; then
+      JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+    fi
+
+    gcc -shared -fPIC \
+        -I"$JAVA_HOME/include" \
+        -I"$JAVA_HOME/include/linux" \
+        -o "build/libuint256_jni.so" \
+        uint256-jni.c \
+        build/uint256.a \
+        -lpthread
+
+    cp "build/libuint256_jni.so" "$SCRIPTDIR/uint256/build/${OSARCH}/lib/"
   fi
 
-  go build -buildmode=c-shared -o libuint256_jni.$LIBRARY_EXTENSION uint256-jni.go
-
-  mkdir -p "$SCRIPTDIR/uint256/build/${OSARCH}/lib"
-  cp libuint256_jni.* "$SCRIPTDIR/uint256/build/${OSARCH}/lib"
+  echo "Build completed successfully!"
 }
 
 build_constantine() {

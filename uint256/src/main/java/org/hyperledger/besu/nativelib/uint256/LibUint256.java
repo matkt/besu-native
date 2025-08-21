@@ -1,7 +1,5 @@
 package org.hyperledger.besu.nativelib.uint256;
 
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import org.hyperledger.besu.nativelib.common.BesuNativeLibraryLoader;
 
 import java.nio.ByteBuffer;
@@ -14,45 +12,38 @@ public class LibUint256 {
     static {
         boolean enabled;
         try {
-            BesuNativeLibraryLoader.registerJNA(LibUint256.class,"uint256_jni");
+            BesuNativeLibraryLoader.loadJNI(LibUint256.class,"uint256_jni");
             enabled = true;
-        } catch (final Throwable t) {
-            t.printStackTrace();
+        } catch (final UnsatisfiedLinkError e) {
+            e.printStackTrace();
             enabled = false;
         }
         ENABLED = enabled;
     }
 
-    public static native int mod(com.sun.jna.Pointer a, int aLen,
-                                 com.sun.jna.Pointer b, int bLen,
-                                 com.sun.jna.Pointer out);
+    // Méthodes natives JNI
+    private static native int modNative(byte[] a, int aLen,
+                                        byte[] b, int bLen,
+                                        byte[] out);
+
+    private static final ThreadLocal<byte[]> TEMP_A = ThreadLocal.withInitial(() -> new byte[32]);
+    private static final ThreadLocal<byte[]> TEMP_B = ThreadLocal.withInitial(() -> new byte[32]);
+    private static final ThreadLocal<byte[]> TEMP_OUT = ThreadLocal.withInitial(() -> new byte[32]);
 
     public static byte[] mod256(byte[] a, byte[] b) {
-        ByteBuffer aBuf = ByteBuffer.allocateDirect(a.length).order(ByteOrder.BIG_ENDIAN);
-        aBuf.put(a).flip();
+        byte[] tempA = TEMP_A.get();
+        byte[] tempB = TEMP_B.get();
+        byte[] out = TEMP_OUT.get();
+        System.arraycopy(a, 0, tempA, 32 - a.length, a.length);
+        System.arraycopy(b, 0, tempB, 32 - b.length, b.length);
 
-        ByteBuffer bBuf = ByteBuffer.allocateDirect(b.length).order(ByteOrder.BIG_ENDIAN); // ← fix ici
-        bBuf.put(b).flip();
+        int n = modNative(tempA, 32, tempB, 32, out);
 
-        ByteBuffer outBuf = ByteBuffer.allocateDirect(32);
-
-        Pointer aPtr = Native.getDirectBufferPointer(aBuf);
-        Pointer bPtr = Native.getDirectBufferPointer(bBuf);
-        Pointer outPtr = Native.getDirectBufferPointer(outBuf);
-
-        // 3) Appel natif
-        int n = LibUint256.mod(aPtr, aBuf.remaining(), bPtr, bBuf.remaining(), outPtr);
         if (n < 0) {
-            throw new IllegalArgumentException("mod() native error code: " + n);
-        }
-        if (n != 32) {
-            throw new IllegalStateException("Unexpected output length: " + n);
+            throw new ArithmeticException("mod error: " + n);
         }
 
-        // 4) Lire la sortie
-        outBuf.position(0);
-        byte[] out = new byte[32];
-        outBuf.get(out);
-        return out;
+        return out.clone(); // Retourner une copie
     }
+
 }
