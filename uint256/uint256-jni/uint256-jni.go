@@ -14,25 +14,26 @@ import (
 
 //export mod
 func mod(a *C.char, aLen C.int, b *C.char, bLen C.int, out *C.char) C.int {
-	    if a == nil || b == nil || out == nil {
-    		return C.int(-2) // invalid pointers
-    	}
-    	ab := C.GoBytes(unsafe.Pointer(a), aLen)
-    	bb := C.GoBytes(unsafe.Pointer(b), bLen)
+	if a == nil || b == nil || out == nil {
+		return C.int(-2) // invalid pointers
+	}
 
-    	var x, y uint256.Int
-    	x.SetBytes(ab) // big-endian
-    	y.SetBytes(bb) // big-endian
-    	if y.IsZero() {
-    		return C.int(-1) // mod by zero
-    	}
-    	var r uint256.Int
-    	r.Mod(&x, &y)
+	ab := unsafe.Slice((*byte)(unsafe.Pointer(a)), int(aLen))
+	bb := unsafe.Slice((*byte)(unsafe.Pointer(b)), int(bLen))
 
-    	// r.Bytes32() -> [32]byte big-endian
-    	res := r.Bytes32()
-    	C.memcpy(unsafe.Pointer(out), unsafe.Pointer(&res[0]), 32)
-    	return C.int(32) // number of bytes written
+	var x, y uint256.Int
+	x.SetBytes(ab) // big-endian
+	y.SetBytes(bb) // big-endian
+	if y.IsZero() {
+		return C.int(-1) // mod by zero
+	}
+
+	var r uint256.Int
+	r.Mod(&x, &y)
+
+	// Écrire directement 32 octets dans out (zéro appel C).
+	*(*[32]byte)(unsafe.Pointer(out)) = r.Bytes32()
+	return C.int(32)
 }
 
 
