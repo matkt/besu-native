@@ -15,23 +15,22 @@ import (
 //export mod
 func mod(a *C.char, aLen C.int, b *C.char, bLen C.int, out *C.char) C.int {
 	if a == nil || b == nil || out == nil {
-		return C.int(-2) // invalid pointers
+		return C.int(-2)
 	}
 
 	ab := unsafe.Slice((*byte)(unsafe.Pointer(a)), int(aLen))
 	bb := unsafe.Slice((*byte)(unsafe.Pointer(b)), int(bLen))
 
 	var x, y uint256.Int
-	x.SetBytes(ab) // big-endian
-	y.SetBytes(bb) // big-endian
+	x.SetBytes(ab)
+	y.SetBytes(bb)
 	if y.IsZero() {
-		return C.int(-1) // mod by zero
+		return C.int(-1)
 	}
 
 	var r uint256.Int
 	r.Mod(&x, &y)
 
-	// Écrire directement 32 octets dans out (zéro appel C).
 	*(*[32]byte)(unsafe.Pointer(out)) = r.Bytes32()
 	return C.int(32)
 }
